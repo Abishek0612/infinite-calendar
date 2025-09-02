@@ -35,7 +35,7 @@ export const JournalEntryCard: React.FC<JournalEntryCardProps> = React.memo(
 
     const isVisible = useIntersectionObserver(cardRef, {
       threshold: 0.1,
-      rootMargin: "50px",
+      rootMargin: "100px",
     });
 
     const renderStars = React.useMemo(
@@ -55,12 +55,23 @@ export const JournalEntryCard: React.FC<JournalEntryCardProps> = React.memo(
     );
 
     const handleImageLoad = React.useCallback(() => {
-      setImageLoaded(true);
+      requestAnimationFrame(() => {
+        setImageLoaded(true);
+        setImageError(false);
+      });
     }, []);
 
     const handleImageError = React.useCallback(() => {
-      setImageError(true);
+      requestAnimationFrame(() => {
+        setImageError(true);
+        setImageLoaded(false);
+      });
     }, []);
+
+    useEffect(() => {
+      setImageLoaded(false);
+      setImageError(false);
+    }, [entry.imgUrl]);
 
     return (
       <div
@@ -68,7 +79,7 @@ export const JournalEntryCard: React.FC<JournalEntryCardProps> = React.memo(
         onClick={onClick}
         className="relative w-12 h-12 cursor-pointer group transform transition-transform hover:scale-105"
       >
-        {isVisible && (
+        {isVisible ? (
           <>
             {!imageError ? (
               <>
@@ -78,21 +89,23 @@ export const JournalEntryCard: React.FC<JournalEntryCardProps> = React.memo(
                 <img
                   src={entry.imgUrl}
                   alt="Journal entry"
-                  className={`w-full h-full object-cover rounded-lg shadow-sm transition-opacity duration-300 ${
-                    imageLoaded ? "opacity-100" : "opacity-0"
+                  className={`w-full h-full object-cover rounded-lg shadow-sm transition-opacity duration-200 ${
+                    imageLoaded ? "opacity-100" : "opacity-0 absolute"
                   }`}
                   loading="lazy"
+                  decoding="async"
                   onLoad={handleImageLoad}
                   onError={handleImageError}
-                  style={{ display: imageLoaded ? "block" : "none" }}
                 />
               </>
             ) : (
-              <div className="w-full h-full bg-gray-300 rounded-lg flex items-center justify-center text-gray-500 text-xs">
-                Failed
+              <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 rounded-lg flex items-center justify-center text-gray-500 text-xs font-medium">
+                📷
               </div>
             )}
           </>
+        ) : (
+          <div className="w-full h-full bg-gray-200 rounded-lg" />
         )}
 
         <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-all duration-200" />

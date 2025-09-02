@@ -1,24 +1,32 @@
 import React from "react";
-import { MonthData } from "../../types";
+import { MonthData, JournalEntry } from "../../types";
 import { DayCell } from "./DayCell";
 import { isSameDay } from "date-fns";
 
 interface MonthGridProps {
   monthData: MonthData;
-  onEntryClick: (entryIndex: number, monthData: MonthData) => void;
+  onEntryClick: (entry: JournalEntry) => void;
+  onAddEntry: (date: Date) => void;
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export const MonthGrid: React.FC<MonthGridProps> = React.memo(
-  ({ monthData, onEntryClick }) => {
+  ({ monthData, onEntryClick, onAddEntry }) => {
     const today = new Date();
 
     const handleEntryClick = React.useCallback(
-      (entryIndex: number) => {
-        onEntryClick(entryIndex, monthData);
+      (entry: JournalEntry) => {
+        onEntryClick(entry);
       },
-      [onEntryClick, monthData]
+      [onEntryClick]
+    );
+
+    const handleDayClick = React.useCallback(
+      (date: Date) => {
+        onAddEntry(date);
+      },
+      [onAddEntry]
     );
 
     return (
@@ -39,6 +47,7 @@ export const MonthGrid: React.FC<MonthGridProps> = React.memo(
               key={`${monthData.year}-${monthData.month}-${index}`}
               calendarDate={calendarDate}
               onEntryClick={handleEntryClick}
+              onDayClick={handleDayClick}
               isToday={isSameDay(calendarDate.date, today)}
             />
           ))}
