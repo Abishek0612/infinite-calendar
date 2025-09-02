@@ -35,7 +35,7 @@ export const JournalEntryCard: React.FC<JournalEntryCardProps> = React.memo(
 
     const isVisible = useIntersectionObserver(cardRef, {
       threshold: 0.1,
-      rootMargin: "100px",
+      rootMargin: "200px",
     });
 
     const renderStars = React.useMemo(

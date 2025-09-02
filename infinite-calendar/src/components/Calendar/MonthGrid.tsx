@@ -54,13 +54,6 @@ export const MonthGrid: React.FC<MonthGridProps> = React.memo(
         </div>
       </div>
     );
-  },
-  (prevProps, nextProps) => {
-    return (
-      prevProps.monthData.year === nextProps.monthData.year &&
-      prevProps.monthData.month === nextProps.monthData.month &&
-      prevProps.monthData.dates.length === nextProps.monthData.dates.length
-    );
   }
 );
 

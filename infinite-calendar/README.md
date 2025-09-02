@@ -34,6 +34,7 @@ Basically an endless calendar where you can scroll up and down through months fo
 - Swipeable card modal - click entries to open full view, swipe between entries
 - Mobile optimized - works perfectly on phones, tablets, desktop
 - Performance focused - no slowdown even after extensive scrolling
+- Add , Edit and Delete Features implemented
 
 # Bonus Features
 

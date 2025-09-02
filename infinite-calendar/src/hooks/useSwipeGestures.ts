@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef } from "react";
 
 interface SwipeGestureOptions {
   onSwipeLeft?: () => void;
@@ -11,124 +11,95 @@ export const useSwipeGestures = ({
   onSwipeRight,
   threshold = 50,
 }: SwipeGestureOptions) => {
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragRef = useRef<{ startX: number; currentX: number } | null>(null);
+  const dragInfo = useRef<{
+    startX: number;
+    isDragging: boolean;
+  } | null>(null);
 
+  // --- Touch Handlers ---
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-    setIsDragging(false);
+    const startX = e.targetTouches[0].clientX;
+    dragInfo.current = { startX, isDragging: false };
   }, []);
 
-  const onTouchMove = useCallback(
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!dragInfo.current) return;
+
+    const currentX = e.targetTouches[0].clientX;
+    const distance = Math.abs(currentX - dragInfo.current.startX);
+
+    if (!dragInfo.current.isDragging && distance > 10) {
+      dragInfo.current.isDragging = true;
+    }
+  }, []);
+
+  const onTouchEnd = useCallback(
     (e: React.TouchEvent) => {
-      if (!touchStart) return;
-
-      const currentTouch = e.targetTouches[0].clientX;
-      setTouchEnd(currentTouch);
-
-      if (Math.abs(currentTouch - touchStart) > 10) {
-        setIsDragging(true);
+      if (!dragInfo.current?.isDragging) {
+        dragInfo.current = null;
+        return;
       }
+
+      const endX = e.changedTouches[0].clientX;
+      const distance = dragInfo.current.startX - endX;
+
+      const isLeftSwipe = distance > threshold;
+      const isRightSwipe = distance < -threshold;
+
+      if (isLeftSwipe && onSwipeLeft) {
+        onSwipeLeft();
+      } else if (isRightSwipe && onSwipeRight) {
+        onSwipeRight();
+      }
+
+      dragInfo.current = null;
     },
-    [touchStart]
+    [threshold, onSwipeLeft, onSwipeRight]
   );
 
-  const onTouchEnd = useCallback(() => {
-    if (!touchStart || !touchEnd || !isDragging) {
-      setIsDragging(false);
-      return;
-    }
+  // --- Mouse Handlers ---
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragInfo.current = { startX: e.clientX, isDragging: false };
 
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > threshold;
-    const isRightSwipe = distance < -threshold;
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        if (!dragInfo.current) return;
 
-    if (isLeftSwipe && onSwipeLeft) {
-      onSwipeLeft();
-    } else if (isRightSwipe && onSwipeRight) {
-      onSwipeRight();
-    }
+        const distance = Math.abs(moveEvent.clientX - dragInfo.current.startX);
+        if (!dragInfo.current.isDragging && distance > 10) {
+          dragInfo.current.isDragging = true;
+        }
+      };
 
-    setIsDragging(false);
-  }, [touchStart, touchEnd, isDragging, threshold, onSwipeLeft, onSwipeRight]);
+      const handleMouseUp = (upEvent: MouseEvent) => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
 
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    dragRef.current = {
-      startX: e.clientX,
-      currentX: e.clientX,
-    };
-    setIsDragging(false);
-  }, []);
+        if (dragInfo.current?.isDragging) {
+          const distance = dragInfo.current.startX - upEvent.clientX;
+          const isLeftSwipe = distance > threshold;
+          const isRightSwipe = distance < -threshold;
 
-  const onMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!dragRef.current) return;
+          if (isLeftSwipe && onSwipeLeft) {
+            onSwipeLeft();
+          } else if (isRightSwipe && onSwipeRight) {
+            onSwipeRight();
+          }
+        }
+        dragInfo.current = null;
+      };
 
-    dragRef.current.currentX = e.clientX;
-    const distance = Math.abs(e.clientX - dragRef.current.startX);
-
-    if (distance > 10) {
-      setIsDragging(true);
-    }
-  }, []);
-
-  const onMouseUp = useCallback(() => {
-    if (!dragRef.current || !isDragging) {
-      setIsDragging(false);
-      dragRef.current = null;
-      return;
-    }
-
-    const distance = dragRef.current.startX - dragRef.current.currentX;
-    const isLeftSwipe = distance > threshold;
-    const isRightSwipe = distance < -threshold;
-
-    if (isLeftSwipe && onSwipeLeft) {
-      onSwipeLeft();
-    } else if (isRightSwipe && onSwipeRight) {
-      onSwipeRight();
-    }
-
-    setIsDragging(false);
-    dragRef.current = null;
-  }, [isDragging, threshold, onSwipeLeft, onSwipeRight]);
-
-  useEffect(() => {
-    const handleMouseUp = () => {
-      if (dragRef.current) {
-        onMouseUp();
-      }
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!dragRef.current) return;
-
-      dragRef.current.currentX = e.clientX;
-      const distance = Math.abs(e.clientX - dragRef.current.startX);
-
-      if (distance > 10) {
-        setIsDragging(true);
-      }
-    };
-
-    document.addEventListener("mouseup", handleMouseUp);
-    document.addEventListener("mousemove", handleMouseMove);
-
-    return () => {
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.removeEventListener("mousemove", handleMouseMove);
-    };
-  }, [onMouseUp]);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [threshold, onSwipeLeft, onSwipeRight]
+  );
 
   return {
     onTouchStart,
     onTouchMove,
     onTouchEnd,
     onMouseDown,
-    onMouseMove,
-    onMouseUp: () => {},
   };
 };

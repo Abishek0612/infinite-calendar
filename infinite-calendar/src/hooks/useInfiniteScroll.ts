@@ -20,9 +20,9 @@ export const useInfiniteScroll = ({
       setScrollTop(scrollTop);
 
       const containerHeight = target.clientHeight;
-      const startIndex = Math.floor(scrollTop / itemHeight) - 2;
+      const startIndex = Math.floor(scrollTop / itemHeight) - 4;
       const endIndex =
-        Math.ceil((scrollTop + containerHeight) / itemHeight) + 2;
+        Math.ceil((scrollTop + containerHeight) / itemHeight) + 4;
 
       setVisibleRange({
         start: Math.max(0, startIndex),
