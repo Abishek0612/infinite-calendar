@@ -1,17 +1,39 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+  startTransition,
+} from "react";
 import { addMonths, subMonths, isSameMonth } from "date-fns";
 import { CalendarHeader } from "./CalendarHeader";
 import { MonthGrid } from "./MonthGrid";
-import { JournalModal } from "../Modal/JournalModal";
-import { SearchBar } from "../Search/SearchBar";
 import { MonthData, JournalEntry } from "../../types";
 import { getCalendarDays } from "../../utils/calendarUtils";
 import { useInfiniteScroll } from "../../hooks/useInfiniteScroll";
 import { useKeyboardNavigation } from "../../hooks/useKeyboardNavigation";
 import { journalEntries } from "../../data/journalData";
 
+const JournalModal = React.lazy(() =>
+  import("../Modal/JournalModal").then((module) => ({
+    default: module.JournalModal,
+  }))
+);
+const SearchBar = React.lazy(() =>
+  import("../Search/SearchBar").then((module) => ({
+    default: module.SearchBar,
+  }))
+);
+
 const MONTH_HEIGHT = 400;
 const BUFFER_MONTHS = 12;
+
+const ComponentLoader: React.FC = React.memo(() => (
+  <div className="flex items-center justify-center p-4">
+    <div className="animate-pulse h-8 bg-gray-200 rounded w-full max-w-md"></div>
+  </div>
+));
 
 export const Calendar: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -36,7 +58,6 @@ export const Calendar: React.FC = () => {
 
   const months = useMemo(() => {
     const monthsData: MonthData[] = [];
-    const startDate = subMonths(new Date(), BUFFER_MONTHS);
 
     for (let i = -BUFFER_MONTHS; i <= BUFFER_MONTHS; i++) {
       const date = addMonths(new Date(), i);
@@ -58,81 +79,114 @@ export const Calendar: React.FC = () => {
     initialIndex: BUFFER_MONTHS,
   });
 
+  const navigateToMonth = useCallback(
+    (targetDate: Date) => {
+      const monthIndex = months.findIndex(
+        (m) =>
+          m.year === targetDate.getFullYear() &&
+          m.month === targetDate.getMonth()
+      );
+
+      if (monthIndex !== -1 && scrollContainerRef.current) {
+        scrollToIndex(monthIndex, scrollContainerRef.current);
+      }
+    },
+    [months, scrollToIndex]
+  );
+
+  const handleArrowUp = useCallback(() => {
+    setCurrentDisplayMonth((prevMonth) => {
+      const newMonth = subMonths(prevMonth, 1);
+      navigateToMonth(newMonth);
+      return newMonth;
+    });
+  }, [navigateToMonth]);
+
+  const handleArrowDown = useCallback(() => {
+    setCurrentDisplayMonth((prevMonth) => {
+      const newMonth = addMonths(prevMonth, 1);
+      navigateToMonth(newMonth);
+      return newMonth;
+    });
+  }, [navigateToMonth]);
+
   useKeyboardNavigation({
-    onArrowUp: () => {
-      const newMonth = subMonths(currentDisplayMonth, 1);
-      setCurrentDisplayMonth(newMonth);
-      navigateToMonth(newMonth);
-    },
-    onArrowDown: () => {
-      const newMonth = addMonths(currentDisplayMonth, 1);
-      setCurrentDisplayMonth(newMonth);
-      navigateToMonth(newMonth);
-    },
+    onArrowUp: handleArrowUp,
+    onArrowDown: handleArrowDown,
   });
 
-  const navigateToMonth = (targetDate: Date) => {
-    const monthIndex = months.findIndex(
-      (m) =>
-        m.year === targetDate.getFullYear() && m.month === targetDate.getMonth()
-    );
+  const updateCurrentMonth = useCallback(
+    (scrollTop: number) => {
+      const visibleMonthIndex = Math.round(scrollTop / MONTH_HEIGHT);
+      const clampedIndex = Math.max(
+        0,
+        Math.min(visibleMonthIndex, months.length - 1)
+      );
 
-    if (monthIndex !== -1 && scrollContainerRef.current) {
-      scrollToIndex(monthIndex, scrollContainerRef.current);
-    }
-  };
+      const visibleMonth = months[clampedIndex];
+      if (visibleMonth) {
+        const newDate = new Date(visibleMonth.year, visibleMonth.month);
 
-  const updateCurrentMonth = (scrollTop: number) => {
-    const visibleMonthIndex = Math.round(scrollTop / MONTH_HEIGHT);
-    const clampedIndex = Math.max(
-      0,
-      Math.min(visibleMonthIndex, months.length - 1)
-    );
-
-    const visibleMonth = months[clampedIndex];
-    if (visibleMonth) {
-      const newDate = new Date(visibleMonth.year, visibleMonth.month);
-
-      if (!isSameMonth(newDate, currentDisplayMonth)) {
-        setHeaderAnimating(true);
-        setCurrentDisplayMonth(newDate);
-
-        setTimeout(() => setHeaderAnimating(false), 300);
+        setCurrentDisplayMonth((prevDate) => {
+          if (!isSameMonth(newDate, prevDate)) {
+            setHeaderAnimating(true);
+            setTimeout(() => setHeaderAnimating(false), 300);
+            return newDate;
+          }
+          return prevDate;
+        });
       }
-    }
-  };
+    },
+    [months]
+  );
 
-  const onScrollHandler = (event: React.UIEvent<HTMLDivElement>) => {
-    handleScroll(event);
-    const target = event.target as HTMLDivElement;
-    updateCurrentMonth(target.scrollTop);
-  };
+  const onScrollHandler = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      handleScroll(event);
+      const target = event.target as HTMLDivElement;
 
-  const handleEntryClick = (entryIndex: number, monthData: MonthData) => {
-    const allEntriesInMonth = monthData.dates
-      .flatMap((date) => date.journalEntries)
-      .filter((entry) => entry !== undefined);
+      startTransition(() => {
+        updateCurrentMonth(target.scrollTop);
+      });
+    },
+    [handleScroll, updateCurrentMonth]
+  );
 
-    setSelectedEntries(allEntriesInMonth);
-    setSelectedEntryIndex(entryIndex);
-    setIsModalOpen(true);
-  };
+  const handleEntryClick = useCallback(
+    (entryIndex: number, monthData: MonthData) => {
+      const allEntriesInMonth = monthData.dates
+        .flatMap((date) => date.journalEntries)
+        .filter((entry) => entry !== undefined);
 
-  const handleModalClose = () => {
+      setSelectedEntries(allEntriesInMonth);
+      setSelectedEntryIndex(entryIndex);
+      setIsModalOpen(true);
+    },
+    []
+  );
+
+  const handleModalClose = useCallback(() => {
     setIsModalOpen(false);
-  };
+  }, []);
 
-  const handlePreviousEntry = () => {
-    if (selectedEntryIndex > 0) {
-      setSelectedEntryIndex(selectedEntryIndex - 1);
-    }
-  };
+  const handlePreviousEntry = useCallback(() => {
+    setSelectedEntryIndex((prev) => (prev > 0 ? prev - 1 : prev));
+  }, []);
 
-  const handleNextEntry = () => {
-    if (selectedEntryIndex < selectedEntries.length - 1) {
-      setSelectedEntryIndex(selectedEntryIndex + 1);
-    }
-  };
+  const handleNextEntry = useCallback(() => {
+    setSelectedEntryIndex((prev) => {
+      setSelectedEntries((entries) => {
+        return prev < entries.length - 1 ? entries : entries;
+      });
+      return prev < selectedEntries.length - 1 ? prev + 1 : prev;
+    });
+  }, [selectedEntries.length]);
+
+  const handleSearch = useCallback((query: string) => {
+    startTransition(() => {
+      setSearchQuery(query);
+    });
+  }, []);
 
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -140,8 +194,15 @@ export const Calendar: React.FC = () => {
     }
   }, []);
 
-  const visibleMonths = months.slice(visibleRange.start, visibleRange.end);
-  const startOffset = visibleRange.start * MONTH_HEIGHT;
+  const visibleMonths = useMemo(
+    () => months.slice(visibleRange.start, visibleRange.end),
+    [months, visibleRange.start, visibleRange.end]
+  );
+
+  const startOffset = useMemo(
+    () => visibleRange.start * MONTH_HEIGHT,
+    [visibleRange.start]
+  );
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -151,7 +212,9 @@ export const Calendar: React.FC = () => {
       />
 
       <div className="p-4">
-        <SearchBar onSearch={setSearchQuery} />
+        <React.Suspense fallback={<ComponentLoader />}>
+          <SearchBar onSearch={handleSearch} />
+        </React.Suspense>
       </div>
 
       <div
@@ -171,9 +234,7 @@ export const Calendar: React.FC = () => {
               >
                 <MonthGrid
                   monthData={monthData}
-                  onEntryClick={(entryIndex) =>
-                    handleEntryClick(entryIndex, monthData)
-                  }
+                  onEntryClick={handleEntryClick}
                 />
               </div>
             ))}
@@ -181,14 +242,24 @@ export const Calendar: React.FC = () => {
         </div>
       </div>
 
-      <JournalModal
-        entries={selectedEntries}
-        currentIndex={selectedEntryIndex}
-        isOpen={isModalOpen}
-        onClose={handleModalClose}
-        onPrevious={handlePreviousEntry}
-        onNext={handleNextEntry}
-      />
+      {isModalOpen && (
+        <React.Suspense
+          fallback={
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
+            </div>
+          }
+        >
+          <JournalModal
+            entries={selectedEntries}
+            currentIndex={selectedEntryIndex}
+            isOpen={isModalOpen}
+            onClose={handleModalClose}
+            onPrevious={handlePreviousEntry}
+            onNext={handleNextEntry}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 };
