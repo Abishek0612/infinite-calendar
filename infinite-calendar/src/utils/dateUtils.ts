@@ -1,12 +1,9 @@
 import {
   format,
-  parseISO,
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
   isSameDay,
-  addMonths,
-  subMonths,
 } from "date-fns";
 import { JournalEntry } from "../types";
 
